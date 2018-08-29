@@ -18,6 +18,7 @@
       </ode>
       <real_time_update_rate>1000</real_time_update_rate>
       <max_step_size>0.001</max_step_size>
+      <real_time_factor>1</real_time_factor>
       <max_contacts>40</max_contacts>
     </physics>
     <!-- A global light source -->
