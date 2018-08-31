@@ -67,7 +67,7 @@ void IOBPlugin::Load(physics::ModelPtr _parent, sdf::ElementPtr _sdf) {
 
   this->use_pd_feedback = false;
   if (_sdf->HasElement("pd_feedback")) {
-    this->use_velocity_feedback = _sdf->Get<bool>("pd_feedback");
+    this->use_pd_feedback = _sdf->Get<bool>("pd_feedback");
     std::cerr << ";; use pd feedback" << std::endl;
   }
 
