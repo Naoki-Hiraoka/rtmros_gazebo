@@ -25,6 +25,7 @@ static ros::Subscriber sub_robot_state;
 static bool iob_synchronized;
 static bool start_robothw = false;
 static bool use_velocity_feedback = false;
+static bool use_servo_on = false;
 
 static JointCommand jointcommand;
 static JointCommand initial_jointcommand;
@@ -60,8 +61,6 @@ static int num_of_substeps = 1;
 #define JOINT_ID_REAL2MODEL(id) joint_real2model_vec[id]
 #define JOINT_ID_MODEL2REAL(id) joint_id_model2real(id)
 #define NUM_OF_REAL_JOINT (joint_real2model_vec.size())
-
-#define USE_SERVO_ON 0
 
 static std::map<int, int> joint_model2real_map;
 static std::vector<int>   joint_real2model_vec;
@@ -363,29 +362,24 @@ int write_command_angles(const double *angles)
     }
 
     JointCommand send_com(jointcommand);
-    bool servo_on = true;
 
     send_com.header.stamp = ros::Time::now();
 
     for (int i=0; i<NUM_OF_REAL_JOINT; i++) {
-#if USE_SERVO_ON
-      if (servo[JOINT_ID_REAL2MODEL(i)] > 0) {
-        send_com.position[i] = command[JOINT_ID_REAL2MODEL(i)];
-        send_com.velocity[i] = (command[JOINT_ID_REAL2MODEL(i)] - prev_command[JOINT_ID_REAL2MODEL(i)]) / (overwrite_g_period_ns * 1e-9);
-      } else {
-        servo_on = false;
+      if (use_servo_on){
+	if (servo[JOINT_ID_REAL2MODEL(i)] > 0) send_com.servo[i] = true;
+	else send_com.servo[i] = false;
+	
+	if (power[JOINT_ID_REAL2MODEL(i)] > 0) send_com.power[i] = true;
+	else send_com.power[i] = false;
       }
-#else
       send_com.position[i] = command[JOINT_ID_REAL2MODEL(i)];
       send_com.velocity[i] = (command[JOINT_ID_REAL2MODEL(i)] - prev_command[JOINT_ID_REAL2MODEL(i)]) / (overwrite_g_period_ns * 1e-9);
-#endif
     }
 
     if (iob_synchronized) {
       hrpsys_gazebo_msgs::SyncCommandRequest req;
-      if (servo_on) {
-        req.joint_command = send_com;
-      }
+      req.joint_command = send_com;
       hrpsys_gazebo_msgs::SyncCommandResponse res;
       // std::cerr << "[iob] srv c" << std::endl;
       serv_command.call(req, res);
@@ -393,16 +387,14 @@ int write_command_angles(const double *angles)
       js = res.robot_state;
       init_sub_flag = true;
     } else {
-      if(servo_on) {
-        pub_joint_command.publish(send_com);
-      }
+      pub_joint_command.publish(send_com);
       ros::spinOnce();
     }
     if (!start_robothw) {
       frame = 0;
       start_robothw = true;
     }
-
+    
     return TRUE;
 }
 
@@ -730,8 +722,8 @@ int open_iob(void)
         double rate = 0;
         rosnode->getParam(controller_name + "/iob_rate", rate);
         overwrite_g_period_ns = (long) ((1000 * 1000 * 1000) / rate);
-        fprintf(stderr, "iob::period %d\n", overwrite_g_period_ns);
-        ROS_INFO("[iob] period_ns %d", overwrite_g_period_ns);
+        fprintf(stderr, "iob::period %d\n", int(overwrite_g_period_ns));
+        ROS_INFO("[iob] period_ns %d", int(overwrite_g_period_ns));
       }
     }
 
@@ -757,6 +749,14 @@ int open_iob(void)
         use_velocity_feedback = ret;
         if(ret) {
           ROS_INFO("[iob] use_velocity_feedback");
+        }
+    }
+    if (rosnode->hasParam(controller_name + "/use_servo_on")) {
+        bool ret;
+        rosnode->getParam(controller_name + "/use_servo_on", ret);
+        use_servo_on = ret;
+        if(ret) {
+          ROS_INFO("[iob] use_servo_on");
         }
     }
     XmlRpc::XmlRpcValue param_val;
@@ -787,6 +787,9 @@ int open_iob(void)
 
     unsigned int n = NUM_OF_REAL_JOINT;
 
+    initial_jointcommand.servo.resize(n);
+    initial_jointcommand.power.resize(n);
+    
     initial_jointcommand.position.resize(n);
     initial_jointcommand.velocity.resize(n);
     //initial_jointcommand.effort.resize(n);
@@ -804,6 +807,16 @@ int open_iob(void)
       initial_jointcommand.kpv_velocity.resize(n);
     }
 
+    for (unsigned int i = 0; i < NUM_OF_REAL_JOINT; ++i) {
+      if (use_servo_on){
+	initial_jointcommand.servo[i] = false;
+	initial_jointcommand.power[i] = false;
+      }else{
+	initial_jointcommand.servo[i] = true;
+	initial_jointcommand.power[i] = true;
+      }
+    }
+    
     for (unsigned int i = 0; i < joint_lst.size(); ++i) {
       std::string joint_ns(controller_name);
       joint_ns += ("/gains/" + joint_lst[i] + "/");

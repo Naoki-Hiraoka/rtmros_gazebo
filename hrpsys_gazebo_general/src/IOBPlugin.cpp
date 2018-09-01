@@ -385,10 +385,13 @@ void IOBPlugin::Load(physics::ModelPtr _parent, sdf::ElementPtr _sdf) {
                this->jointDampingModel[i]);
     }
   }
-
+  
   {
     // We are not sending names due to the fact that there is an enum
     // joint indices in ...
+    this->robotState.power.resize(this->joints.size());
+    this->robotState.servo.resize(this->joints.size());
+    
     this->robotState.position.resize(this->joints.size());
     this->robotState.velocity.resize(this->joints.size());
     this->robotState.effort.resize(this->joints.size());
@@ -417,6 +420,9 @@ void IOBPlugin::Load(physics::ModelPtr _parent, sdf::ElementPtr _sdf) {
   }
 
   {
+    this->jointCommand.power.resize(this->joints.size());
+    this->jointCommand.servo.resize(this->joints.size());
+    
     this->jointCommand.position.resize(this->joints.size());
     this->jointCommand.velocity.resize(this->joints.size());
     this->jointCommand.effort.resize(this->joints.size());
@@ -443,6 +449,9 @@ void IOBPlugin::Load(physics::ModelPtr _parent, sdf::ElementPtr _sdf) {
 
 void IOBPlugin::ZeroJointCommand() {
   for (unsigned i = 0; i < this->jointNames.size(); ++i) {
+    this->jointCommand.power[i] = true;
+    this->jointCommand.servo[i] = true;
+    
     this->jointCommand.position[i] = 0;
     this->jointCommand.velocity[i] = 0;
     this->jointCommand.effort[i] = 0;
@@ -583,7 +592,19 @@ void IOBPlugin::SetJointCommand_impl(const JointCommand &_msg) {
 
   this->jointCommand.header.stamp = _msg.header.stamp;
 
-  // for jointCommand, only position, velocity and efforts are used.
+  // for jointCommand, only power servo position, velocity and efforts are used.
+  if (_msg.power.size() == this->jointCommand.power.size())
+    std::copy(_msg.power.begin(), _msg.power.end(), this->jointCommand.power.begin());
+  else
+    ROS_DEBUG("JointCommand message contains different number of"
+      " elements power[%ld] than expected[%ld]",
+      _msg.power.size(), this->jointCommand.power.size());
+  if (_msg.servo.size() == this->jointCommand.servo.size())
+    std::copy(_msg.servo.begin(), _msg.servo.end(), this->jointCommand.servo.begin());
+  else
+    ROS_DEBUG("JointCommand message contains different number of"
+      " elements servo[%ld] than expected[%ld]",
+      _msg.servo.size(), this->jointCommand.servo.size());
   if (_msg.position.size() == this->jointCommand.position.size())
     std::copy(_msg.position.begin(), _msg.position.end(), this->jointCommand.position.begin());
   else
@@ -933,6 +954,8 @@ void IOBPlugin::GetRobotStates(const common::Time &_curTime){
   {
     boost::mutex::scoped_lock lock(this->mutex);
     for (unsigned int i = 0; i < this->joints.size(); ++i) {
+      this->robotState.power[i] = this->jointCommand.power[i];
+      this->robotState.servo[i] = this->jointCommand.servo[i];
       this->robotState.ref_position[i] = this->jointCommand.position[i];
       this->robotState.ref_velocity[i] = this->jointCommand.velocity[i];
     }
@@ -975,8 +998,10 @@ void IOBPlugin::UpdatePID_Velocity_Control(double _dt) {
              j_velocity, positionTarget, robotState.position[i],
              this->robotState.kpv_position[i]);
 #endif
-    // apply velocity to joint
-    this->joints[i]->SetVelocity(0, j_velocity);
+    if (this->jointCommand.power[i] && this->jointCommand.servo[i]){
+      // apply velocity to joint
+      this->joints[i]->SetVelocity(0, j_velocity);
+    }
   }
 }
 
@@ -1072,11 +1097,17 @@ void IOBPlugin::UpdatePIDControl(double _dt) {
       // clamp force after integral tie-back
       forceClamped = math::clamp(forceUnclamped, -this->effortLimit[i], this->effortLimit[i]);
       
-      // apply force to joint
-      this->joints[i]->SetForce(0, forceClamped);
+      if (this->jointCommand.power[i] && this->jointCommand.servo[i]){
+	// apply force to joint
+	this->joints[i]->SetForce(0, forceClamped);
+
+	// fill in jointState efforts
+	this->robotState.effort[i] = forceClamped;
+      }else{
+	// fill in jointState efforts
+	this->robotState.effort[i] = 0.0;
+      }
       
-      // fill in jointState efforts
-      this->robotState.effort[i] = forceClamped;
     } else{
       // truncate joint position within range of motion
       double positionTarget = math::clamp(this->jointCommand.position[i],
@@ -1100,12 +1131,17 @@ void IOBPlugin::UpdatePIDControl(double _dt) {
       
       // clamp force
       double forceClamped = math::clamp(forceUnclamped, -this->effortLimit[i], this->effortLimit[i]);
-     
-      // apply force to joint
-      this->joints[i]->SetForce(0, forceClamped);
-      
-      // fill in jointState efforts
-      this->robotState.effort[i] = forceClamped;
+
+      if (this->jointCommand.power[i] && this->jointCommand.servo[i]){
+	// apply force to joint
+	this->joints[i]->SetForce(0, forceClamped);
+	
+	// fill in jointState efforts
+	this->robotState.effort[i] = forceClamped;
+      }else{
+	// fill in jointState efforts
+	this->robotState.effort[i] = 0.0;
+      }
     }
   }
 }
