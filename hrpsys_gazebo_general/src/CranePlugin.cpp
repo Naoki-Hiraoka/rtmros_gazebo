@@ -140,6 +140,7 @@ namespace gazebo
       this->pullup_fin = false;
       // initialize update time
       this->lastUpdateTime = this->world->GetSimTime();
+      this->count = 0;
       gzmsg << "[CranePlugin]subscribed PullUpCommand." << std::endl;      
     }
 
@@ -164,13 +165,17 @@ namespace gazebo
 	    this->target_height+=pullup_velocity * (curTime - this->lastUpdateTime).Double();
 	  }else{
 	    this->target_height=this->pullup_height;
-	    if(!this->pullup_fin){
-	      this->pullup_fin=true;
-	      math::Quaternion tmp=this->link->GetWorldPose().rot;
-	      math::Vector3 vec=this->link->GetWorldPose().pos;
-	      this->model->SetLinkWorldPose(math::Pose(vec,math::Quaternion(0.0,0.0,tmp.GetYaw())),this->link);
+	    count++;
+	    if(count%100==0){
 	      this->model->SetWorldTwist(math::Vector3(),math::Vector3());
 	    }
+	    // if(!this->pullup_fin){
+	    //   this->pullup_fin=true;
+	    //   math::Quaternion tmp=this->link->GetWorldPose().rot;
+	    //   math::Vector3 vec=this->link->GetWorldPose().pos;
+	    //   this->model->SetLinkWorldPose(math::Pose(vec,math::Quaternion(0.0,0.0,tmp.GetYaw())),this->link);
+	    //   this->model->SetWorldTwist(math::Vector3(),math::Vector3());
+	    // }
 	  }
 	}
 	if (this->pull_down_flag){
@@ -186,7 +191,6 @@ namespace gazebo
 	  derror=(error-pre_error)/(curTime - this->lastUpdateTime).Double();
 	}
 	double F_z = pgain * error + dgain * derror;
-	ROS_INFO("%f",F_z);
 	if (F_z>0.0){
 	  math::Vector3 lin=this->model->GetWorldLinearVel();
 	  math::Vector3 ang=this->model->GetWorldAngularVel();
@@ -229,6 +233,7 @@ namespace gazebo
     bool pull_down_flag;
     bool damp;
     common::Time lastUpdateTime;
+    int count;
 
     ros::NodeHandle* rosNode;
     ros::CallbackQueue rosQueue;
