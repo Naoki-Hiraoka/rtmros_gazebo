@@ -167,7 +167,11 @@ namespace gazebo
 	    this->target_height=this->pullup_height;
 	    count++;
 	    if(count%100==0){
-	      this->model->SetWorldTwist(math::Vector3(),math::Vector3());
+	      math::Vector3 lin=this->model->GetWorldLinearVel();
+	      math::Vector3 ang=this->model->GetWorldAngularVel();
+	      lin *= 0.7;
+	      ang *= 0.7;
+	      this->model->SetWorldTwist(lin,ang);
 	    }
 	    // if(!this->pullup_fin){
 	    //   this->pullup_fin=true;
