@@ -144,6 +144,15 @@ void IOBPlugin::Load(physics::ModelPtr _parent, sdf::ElementPtr _sdf) {
         this->use_pd_feedback = ret;
       }
     }
+    { // read pd_feedback from rosparam
+      std::string pname = this->controller_name + "/use_servo_on";
+      if (this->rosNode->hasParam(pname)) {
+        bool ret;
+        this->rosNode->getParam(pname, ret);
+	ROS_INFO("use servo on %d", ret);
+        this->use_servo_on = ret;
+      }
+    }
     {
       std::string pname = this->controller_name + "/iob_rate";
       if (this->rosNode->hasParam(pname)) {
@@ -449,9 +458,13 @@ void IOBPlugin::Load(physics::ModelPtr _parent, sdf::ElementPtr _sdf) {
 
 void IOBPlugin::ZeroJointCommand() {
   for (unsigned i = 0; i < this->jointNames.size(); ++i) {
-    this->jointCommand.power[i] = true;
-    this->jointCommand.servo[i] = true;
-    
+    if (this->use_servo_on){
+      this->jointCommand.power[i] = false;
+      this->jointCommand.servo[i] = false;
+    } else {
+      this->jointCommand.power[i] = true;
+      this->jointCommand.servo[i] = true;
+    }
     this->jointCommand.position[i] = 0;
     this->jointCommand.velocity[i] = 0;
     this->jointCommand.effort[i] = 0;
