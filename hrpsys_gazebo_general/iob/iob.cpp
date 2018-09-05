@@ -366,15 +366,17 @@ int write_command_angles(const double *angles)
     send_com.header.stamp = ros::Time::now();
 
     for (int i=0; i<NUM_OF_REAL_JOINT; i++) {
-      if (use_servo_on){
-	if (servo[JOINT_ID_REAL2MODEL(i)] > 0) send_com.servo[i] = true;
-	else send_com.servo[i] = false;
-	
-	if (power[JOINT_ID_REAL2MODEL(i)] > 0) send_com.power[i] = true;
-	else send_com.power[i] = false;
+      if (JOINT_ID_REAL2MODEL(i) < number_of_joints()){
+	if (use_servo_on){
+	  if (servo[JOINT_ID_REAL2MODEL(i)] > 0) send_com.servo[i] = true;
+	  else send_com.servo[i] = false;
+	  
+	  if (power[JOINT_ID_REAL2MODEL(i)] > 0) send_com.power[i] = true;
+	  else send_com.power[i] = false;
+	}
+	send_com.position[i] = command[JOINT_ID_REAL2MODEL(i)];
+	send_com.velocity[i] = (command[JOINT_ID_REAL2MODEL(i)] - prev_command[JOINT_ID_REAL2MODEL(i)]) / (overwrite_g_period_ns * 1e-9);
       }
-      send_com.position[i] = command[JOINT_ID_REAL2MODEL(i)];
-      send_com.velocity[i] = (command[JOINT_ID_REAL2MODEL(i)] - prev_command[JOINT_ID_REAL2MODEL(i)]) / (overwrite_g_period_ns * 1e-9);
     }
 
     if (iob_synchronized) {
