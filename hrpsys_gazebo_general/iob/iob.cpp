@@ -873,8 +873,14 @@ int open_iob(void)
       std::cerr << "[iob] set node name : " << node_name << std::endl;
     }
 
+#ifdef IOB2
+    if (!ros::isInitialized()){
+#endif
     std::map<std::string, std::string> arg;
     ros::init(arg, "hrpsys_gazebo_iob", ros::init_options::NoSigintHandler);
+#ifdef IOB2
+    }
+#endif
     rosnode = new ros::NodeHandle();
     ros::WallDuration(0.5).sleep(); // wait for initializing ros
 
