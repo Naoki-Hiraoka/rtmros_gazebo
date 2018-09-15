@@ -49,27 +49,27 @@ namespace gazebo
       }
 
       // find pull up height
-      this->pullup_height = 2.0;
-      if (_sdf->HasElement("pullupheight")) {
-	this->pullup_height = _sdf->Get<double>("pullupheight");
+      this->lift_height = 2.0;
+      if (_sdf->HasElement("liftheight")) {
+	this->lift_height = _sdf->Get<double>("liftheight");
       }
 
-      //find pullup velocity
-      this->pullup_velocity = 1.0;
-      if (_sdf->HasElement("pullupvelocity")) {
-        this->pullup_velocity = _sdf->Get<double>("pullupvelocity");
+      //find lift velocity
+      this->lift_velocity = 1.0;
+      if (_sdf->HasElement("liftvelocity")) {
+        this->lift_velocity = _sdf->Get<double>("liftvelocity");
       }
       
-      //find pulldown velocity
-      this->pulldown_velocity = 1.0;
-      if (_sdf->HasElement("pulldownvelocity")) {
-        this->pulldown_velocity = _sdf->Get<double>("pulldownvelocity");
+      //find lower velocity
+      this->lower_velocity = 1.0;
+      if (_sdf->HasElement("lowervelocity")) {
+        this->lower_velocity = _sdf->Get<double>("lowervelocity");
       }
 
-      //find pulldown height
-      this->pulldown_height = 0.0;
-      if (_sdf->HasElement("pulldownheight")) {
-        this->pulldown_height = _sdf->Get<double>("pulldownheight");
+      //find lower height
+      this->lower_height = 0.0;
+      if (_sdf->HasElement("lowerheight")) {
+        this->lower_height = _sdf->Get<double>("lowerheight");
       }
 
       //find pgain
@@ -92,7 +92,7 @@ namespace gazebo
       // initialize
       {
 	std_msgs::Empty::ConstPtr msg;
-	PullUpCommand(msg);
+	LiftCommand(msg);
       }
       
       // Make sure the ROS node for Gazebo has already been initialized
@@ -109,19 +109,19 @@ namespace gazebo
 
     void DeferredLoad() {
       // ros topic subscribtions
-      ros::SubscribeOptions PullUpCommandSo =
-        ros::SubscribeOptions::create<std_msgs::Empty>("/" + this->obj_name + "/CranePlugin/PullUpCommand", 100,
-                                                    boost::bind(&Crane::PullUpCommand, this, _1),
+      ros::SubscribeOptions LiftCommandSo =
+        ros::SubscribeOptions::create<std_msgs::Empty>("/" + this->obj_name + "/CranePlugin/LiftCommand", 100,
+                                                    boost::bind(&Crane::LiftCommand, this, _1),
                                                     ros::VoidPtr(), &this->rosQueue);
-      ros::SubscribeOptions PullDownCommandSo =
-        ros::SubscribeOptions::create<std_msgs::Empty>("/" + this->obj_name + "/CranePlugin/PullDownCommand", 100,
-                                              boost::bind(&Crane::PullDownCommand, this, _1),
+      ros::SubscribeOptions LowerCommandSo =
+        ros::SubscribeOptions::create<std_msgs::Empty>("/" + this->obj_name + "/CranePlugin/LowerCommand", 100,
+                                              boost::bind(&Crane::LowerCommand, this, _1),
                                               ros::VoidPtr(), &this->rosQueue);
       // Enable TCP_NODELAY because TCP causes bursty communication with high jitter,
-      PullUpCommandSo.transport_hints = ros::TransportHints().reliable().tcpNoDelay(true);
-      this->subPullUpCommand = this->rosNode->subscribe(PullUpCommandSo);
-      PullDownCommandSo.transport_hints = ros::TransportHints().reliable().tcpNoDelay(true);
-      this->subPullDownCommand = this->rosNode->subscribe(PullDownCommandSo);
+      LiftCommandSo.transport_hints = ros::TransportHints().reliable().tcpNoDelay(true);
+      this->subLiftCommand = this->rosNode->subscribe(LiftCommandSo);
+      LowerCommandSo.transport_hints = ros::TransportHints().reliable().tcpNoDelay(true);
+      this->subLowerCommand = this->rosNode->subscribe(LowerCommandSo);
 
       // ros callback queue for processing subscription
       this->callbackQueeuThread = boost::thread(boost::bind(&Crane::RosQueueThread, this));
@@ -132,19 +132,19 @@ namespace gazebo
       ROS_INFO("CranePlugin was loaded !");
     }
 
-    void PullUpCommand(const std_msgs::Empty::ConstPtr &_msg)
+    void LiftCommand(const std_msgs::Empty::ConstPtr &_msg)
     {
       this->pull_up_flag = true;
       this->pull_down_flag = false;
       this->target_height = this->link->GetWorldPose().pos.z;
-      this->pullup_fin = false;
+      this->lift_fin = false;
       // initialize update time
       this->lastUpdateTime = this->world->GetSimTime();
       this->count = 0;
-      gzmsg << "[CranePlugin]subscribed PullUpCommand." << std::endl;      
+      gzmsg << "[CranePlugin]subscribed LiftCommand." << std::endl;      
     }
 
-    void PullDownCommand(const std_msgs::Empty::ConstPtr &_msg)
+    void LowerCommand(const std_msgs::Empty::ConstPtr &_msg)
     {
       if(this->pull_up_flag){
 	this->pull_up_flag = false;
@@ -152,7 +152,7 @@ namespace gazebo
 	// initialize update time
 	this->lastUpdateTime = this->world->GetSimTime();
       }
-      gzdbg << "[CranePlugin]subscribed PullDownCommand." << std::endl;
+      gzdbg << "[CranePlugin]subscribed LowerCommand." << std::endl;
     }
 
     // Called by the world update start event
@@ -161,10 +161,10 @@ namespace gazebo
       if (this->pull_up_flag||this->pull_down_flag) {
 	common::Time curTime = this->world->GetSimTime();
 	if (this->pull_up_flag){
-	  if(this->target_height<this->pullup_height){
-	    this->target_height+=pullup_velocity * (curTime - this->lastUpdateTime).Double();
+	  if(this->target_height<this->lift_height){
+	    this->target_height+=lift_velocity * (curTime - this->lastUpdateTime).Double();
 	  }else{
-	    this->target_height=this->pullup_height;
+	    this->target_height=this->lift_height;
 	    count++;
 	    if(count%100==0){
 	      math::Vector3 lin=this->model->GetWorldLinearVel();
@@ -173,8 +173,8 @@ namespace gazebo
 	      ang *= 0.7;
 	      this->model->SetWorldTwist(lin,ang);
 	    }
-	    // if(!this->pullup_fin){
-	    //   this->pullup_fin=true;
+	    // if(!this->lift_fin){
+	    //   this->lift_fin=true;
 	    //   math::Quaternion tmp=this->link->GetWorldPose().rot;
 	    //   math::Vector3 vec=this->link->GetWorldPose().pos;
 	    //   this->model->SetLinkWorldPose(math::Pose(vec,math::Quaternion(0.0,0.0,tmp.GetYaw())),this->link);
@@ -183,11 +183,11 @@ namespace gazebo
 	  }
 	}
 	if (this->pull_down_flag){
-	  if(this->target_height<this->pulldown_height){
+	  if(this->target_height<this->lower_height){
 	    this->pull_down_flag=false;
 	    return;
 	  }
-	  this->target_height-=pulldown_velocity * (curTime - this->lastUpdateTime).Double();
+	  this->target_height-=lower_velocity * (curTime - this->lastUpdateTime).Double();
 	}
 	double error  = this->target_height - this->link->GetWorldPose().pos.z;
 	double derror = 0.0;
@@ -222,15 +222,15 @@ namespace gazebo
     physics::ModelPtr model;
     std::string obj_name;
     std::string link_name;
-    double pullup_height;
-    double pulldown_height;
+    double lift_height;
+    double lower_height;
     double target_height;
-    double pullup_velocity;
-    double pulldown_velocity;
+    double lift_velocity;
+    double lower_velocity;
     double pgain;
     double dgain;
     double pre_error;
-    bool pullup_fin;
+    bool lift_fin;
     physics::LinkPtr link;
     event::ConnectionPtr updateConnection;
     bool pull_up_flag;
@@ -241,8 +241,8 @@ namespace gazebo
 
     ros::NodeHandle* rosNode;
     ros::CallbackQueue rosQueue;
-    ros::Subscriber subPullUpCommand;
-    ros::Subscriber subPullDownCommand;
+    ros::Subscriber subLiftCommand;
+    ros::Subscriber subLowerCommand;
     boost::thread callbackQueeuThread;
     boost::thread deferredLoadThread;
   };
