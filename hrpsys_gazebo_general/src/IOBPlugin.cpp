@@ -606,25 +606,26 @@ void IOBPlugin::SetJointCommand_impl(const JointCommand &_msg) {
   this->jointCommand.header.stamp = _msg.header.stamp;
 
   // for jointCommand, only power servo position, velocity and efforts are used.
-  if (_msg.power.size() == this->jointCommand.power.size())
-    std::copy(_msg.power.begin(), _msg.power.end(), this->jointCommand.power.begin());
-  else
-    ROS_DEBUG("JointCommand message contains different number of"
-      " elements power[%ld] than expected[%ld]",
-      _msg.power.size(), this->jointCommand.power.size());
-  if (_msg.servo.size() == this->jointCommand.servo.size())
-    std::copy(_msg.servo.begin(), _msg.servo.end(), this->jointCommand.servo.begin());
-  else
-    ROS_DEBUG("JointCommand message contains different number of"
-      " elements servo[%ld] than expected[%ld]",
-      _msg.servo.size(), this->jointCommand.servo.size());
-  if (_msg.position.size() == this->jointCommand.position.size())
-    std::copy(_msg.position.begin(), _msg.position.end(), this->jointCommand.position.begin());
-  else
-    ROS_DEBUG("JointCommand message contains different number of"
-      " elements position[%ld] than expected[%ld]",
-      _msg.position.size(), this->jointCommand.position.size());
-
+  if (this->use_servo_on){
+    if (_msg.power.size() == this->jointCommand.power.size())
+      std::copy(_msg.power.begin(), _msg.power.end(), this->jointCommand.power.begin());
+    else
+      ROS_DEBUG("JointCommand message contains different number of"
+		" elements power[%ld] than expected[%ld]",
+		_msg.power.size(), this->jointCommand.power.size());
+    if (_msg.servo.size() == this->jointCommand.servo.size())
+      std::copy(_msg.servo.begin(), _msg.servo.end(), this->jointCommand.servo.begin());
+    else
+      ROS_DEBUG("JointCommand message contains different number of"
+		" elements servo[%ld] than expected[%ld]",
+		_msg.servo.size(), this->jointCommand.servo.size());
+    if (_msg.position.size() == this->jointCommand.position.size())
+      std::copy(_msg.position.begin(), _msg.position.end(), this->jointCommand.position.begin());
+    else
+      ROS_DEBUG("JointCommand message contains different number of"
+		" elements position[%ld] than expected[%ld]",
+		_msg.position.size(), this->jointCommand.position.size());
+  }
   if (_msg.velocity.size() == this->jointCommand.velocity.size())
     std::copy(_msg.velocity.begin(), _msg.velocity.end(), this->jointCommand.velocity.begin());
   else
