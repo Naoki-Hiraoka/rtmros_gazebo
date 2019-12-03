@@ -25,6 +25,7 @@ IOBPlugin::IOBPlugin() : publish_joint_state(false),
                          use_velocity_feedback(false),
                          use_joint_effort(false),
                          use_loose_synchronized(true),
+                         use_servo_on(false),
                          iob_period(0.005),
                          force_sensor_average_window_size(6),
                          force_sensor_average_cnt(0),
@@ -131,6 +132,15 @@ void IOBPlugin::Load(physics::ModelPtr _parent, sdf::ElementPtr _sdf) {
         this->rosNode->getParam(pname, ret);
         ROS_INFO("use_joint_effort %d", ret);
         this->use_joint_effort = ret;
+      }
+    }
+    { // read pd_feedback from rosparam
+      std::string pname = this->controller_name + "/use_servo_on";
+      if (this->rosNode->hasParam(pname)) {
+        bool ret;
+        this->rosNode->getParam(pname, ret);
+        ROS_INFO("use servo on %d", ret);
+        this->use_servo_on = ret;
       }
     }
     {
@@ -378,6 +388,8 @@ void IOBPlugin::Load(physics::ModelPtr _parent, sdf::ElementPtr _sdf) {
   {
     // We are not sending names due to the fact that there is an enum
     // joint indices in ...
+    this->robotState.power.resize(this->joints.size());
+    this->robotState.servo.resize(this->joints.size());
     this->robotState.position.resize(this->joints.size());
     this->robotState.velocity.resize(this->joints.size());
     this->robotState.effort.resize(this->joints.size());
@@ -406,6 +418,8 @@ void IOBPlugin::Load(physics::ModelPtr _parent, sdf::ElementPtr _sdf) {
   }
 
   {
+    this->jointCommand.power.resize(this->joints.size());
+    this->jointCommand.servo.resize(this->joints.size());
     this->jointCommand.position.resize(this->joints.size());
     this->jointCommand.velocity.resize(this->joints.size());
     this->jointCommand.effort.resize(this->joints.size());
@@ -432,6 +446,13 @@ void IOBPlugin::Load(physics::ModelPtr _parent, sdf::ElementPtr _sdf) {
 
 void IOBPlugin::ZeroJointCommand() {
   for (unsigned i = 0; i < this->jointNames.size(); ++i) {
+    if (this->use_servo_on){
+      this->jointCommand.power[i] = false;
+      this->jointCommand.servo[i] = false;
+    } else {
+      this->jointCommand.power[i] = true;
+      this->jointCommand.servo[i] = true;
+    }
     this->jointCommand.position[i] = 0;
     this->jointCommand.velocity[i] = 0;
     this->jointCommand.effort[i] = 0;
@@ -572,6 +593,20 @@ void IOBPlugin::SetJointCommand_impl(const JointCommand &_msg) {
 
   this->jointCommand.header.stamp = _msg.header.stamp;
 
+  if (this->use_servo_on){
+    if (_msg.power.size() == this->jointCommand.power.size())
+      std::copy(_msg.power.begin(), _msg.power.end(), this->jointCommand.power.begin());
+    else
+      ROS_DEBUG("JointCommand message contains different number of"
+                " elements power[%ld] than expected[%ld]",
+                _msg.power.size(), this->jointCommand.power.size());
+    if (_msg.servo.size() == this->jointCommand.servo.size())
+      std::copy(_msg.servo.begin(), _msg.servo.end(), this->jointCommand.servo.begin());
+    else
+      ROS_DEBUG("JointCommand message contains different number of"
+                " elements servo[%ld] than expected[%ld]",
+                _msg.servo.size(), this->jointCommand.servo.size());
+  }
   // for jointCommand, only position, velocity and efforts are used.
   if (_msg.position.size() == this->jointCommand.position.size())
     std::copy(_msg.position.begin(), _msg.position.end(), this->jointCommand.position.begin());
@@ -928,6 +963,8 @@ void IOBPlugin::GetRobotStates(const common::Time &_curTime){
   {
     boost::mutex::scoped_lock lock(this->mutex);
     for (unsigned int i = 0; i < this->joints.size(); ++i) {
+      this->robotState.power[i] = this->jointCommand.power[i];
+      this->robotState.servo[i] = this->jointCommand.servo[i];
       this->robotState.ref_position[i] = this->jointCommand.position[i];
       this->robotState.ref_velocity[i] = this->jointCommand.velocity[i];
     }
@@ -975,7 +1012,9 @@ void IOBPlugin::UpdatePID_Velocity_Control(double _dt) {
              this->robotState.kpv_position[i]);
 #endif
     // apply velocity to joint
-    this->joints[i]->SetVelocity(0, j_velocity);
+    if (this->jointCommand.power[i] && this->jointCommand.servo[i]){
+      this->joints[i]->SetVelocity(0, j_velocity);
+    }
   }
 }
 
